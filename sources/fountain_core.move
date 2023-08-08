@@ -58,7 +58,7 @@ module kriya_fountain::fountain_core {
     struct UnstakeEvent<phantom A, phantom B, phantom R> has copy, drop {
         fountain_id: ID,
         unstake_amount: u64,
-        unstake_weigth: u64,
+        unstake_weight: u64,
         end_time: u64,
     }
 
@@ -196,7 +196,7 @@ module kriya_fountain::fountain_core {
         event::emit(UnstakeEvent<A, B, R> {
             fountain_id,
             unstake_amount: stake_amount,
-            unstake_weigth: stake_weight,
+            unstake_weight: stake_weight,
             end_time: current_time,
         });
         let returned_stake = spot_dex::lp_token_split(&mut fountain.staked, stake_amount, ctx);
