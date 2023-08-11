@@ -17,7 +17,7 @@ module kriya_fountain::test_unstake {
     #[test]
     fun test_unstake() {
         let flow_amount: u64 = 100_000_000_000_000;
-        let flow_interval: u64 = 86400_000 * 7; // 1 week
+        let flow_interval: u64 = 86400_000 * 7 * 20; // 20 weeks
         let min_lock_time: u64 = flow_interval * 5;
         let max_lock_time: u64 = flow_interval * 20;
         let scenario_val = ftu::setup<TEST_COIN_A, TEST_COIN_B, SUI>(
@@ -59,8 +59,11 @@ module kriya_fountain::test_unstake {
 
         let idx: u64 = 0;
         let unstakers = vector<address>[];
-        let stake_amounts = vector<u64>[];
+        let unstake_amounts = vector<u64>[];
         let reward_amounts = vector<u64>[];
+        let after_stakers = vector<address>[];
+        let after_stake_weights = vector<u64>[];
+        let after_total_weight = total_weight;
         while (idx < staker_count) {
             let staker = *vector::borrow(&stakers, idx);
             ts::next_tx(scenario, staker);
@@ -72,19 +75,22 @@ module kriya_fountain::test_unstake {
                 let lock_util = fc::get_proof_lock_until(&proof);
                 // std::debug::print(&lock_util);
                 let current_time = clock::timestamp_ms(&clock);
+                let stake_weight = fc::get_proof_stake_weight(&proof);
                 if (current_time >= lock_util) {
-                    let stake_weight = fc::get_proof_stake_weight(&proof);
                     let stake_amount = fc::get_proof_stake_amount(&proof);
                     let reward_amount = fc::get_reward_amount(&fountain, &proof, current_time);
-                    let expected_reward_amount = math::mul_factor(flow_amount, stake_weight, total_weight);
+                    let expected_reward_amount = math::mul_factor(flow_amount * 3 / 4, stake_weight, total_weight);
                     // std::debug::print(&reward_amount);
                     // std::debug::print(&expected_reward_amount);
                     assert!(reward_amount == expected_reward_amount, 0);
                     vector::push_back(&mut unstakers, staker);
-                    vector::push_back(&mut stake_amounts, stake_amount);
+                    vector::push_back(&mut unstake_amounts, stake_amount);
                     vector::push_back(&mut reward_amounts, reward_amount);
                     fp::unstake(&clock, &mut fountain, proof, ts::ctx(scenario));
+                    after_total_weight = after_total_weight - stake_weight;
                 } else {
+                    vector::push_back(&mut after_stakers, staker);
+                    vector::push_back(&mut after_stake_weights, stake_weight);
                     ts::return_to_sender(scenario, proof);
                 };
                 ts::return_shared(clock);
@@ -107,9 +113,62 @@ module kriya_fountain::test_unstake {
                 assert!(coin::value(&unstaker_reward) == expected_reward_amount, 0);
                 ts::return_to_sender(scenario, unstaker_reward);
                 let unstaker_lp = ts::take_from_sender<KriyaLPToken<TEST_COIN_A, TEST_COIN_B>>(scenario);
-                let expected_stake_amount = *vector::borrow(&stake_amounts, idx);
+                let expected_stake_amount = *vector::borrow(&unstake_amounts, idx);
                 assert!(spot_dex::lp_token_value(&unstaker_lp) == expected_stake_amount, 0);
                 ts::return_to_sender(scenario, unstaker_lp);
+            };
+            idx = idx + 1;
+        };
+
+        let one_week: u64 = 86400_000 * 7;
+        ts::next_tx(scenario, ftu::dev());
+        {
+            let clock = ts::take_shared<Clock>(scenario);
+            let fountain = ts::take_shared<Fountain<TEST_COIN_A, TEST_COIN_B, SUI>>(scenario);
+            clock::increment_for_testing(&mut clock, one_week);
+            let input_sui = balance::create_for_testing<SUI>(10);
+            let input_sui = coin::from_balance(input_sui, ts::ctx(scenario));
+            fp::tune(&mut fountain, input_sui);
+            // std::debug::print(&fc::get_total_weight(&fountain));
+            // std::debug::print(&after_total_weight);
+            assert!(fc::get_total_weight(&fountain) == after_total_weight, 0);
+            ts::return_shared(clock);
+            ts::return_shared(fountain);
+        };
+
+        let idx: u64 = 0;
+        let staker_count = vector::length(&after_stakers);
+        while (idx < staker_count) {
+            let staker = *vector::borrow(&after_stakers, idx);
+            ts::next_tx(scenario, staker);
+            {
+                let clock = ts::take_shared<Clock>(scenario);
+                let fountain = ts::take_shared<Fountain<TEST_COIN_A, TEST_COIN_B, SUI>>(scenario);
+                // std::debug::print(&fountain);
+                let proof = ts::take_from_sender<StakeProof<TEST_COIN_A, TEST_COIN_B, SUI>>(scenario);
+                fp::claim(&clock, &mut fountain, &mut proof, ts::ctx(scenario));
+                ts::return_shared(clock);
+                ts::return_shared(fountain);
+                ts::return_to_sender(scenario, proof);
+            };
+            idx = idx + 1;
+        };
+
+        let idx: u64 = 0;
+        let first_released_amount = math::mul_factor(flow_amount, fifteen_weeks, flow_interval);
+        let second_released_amount = math::mul_factor(flow_amount, one_week, flow_interval);
+        while (idx < staker_count) {
+            let staker = *vector::borrow(&after_stakers, idx);
+            let stake_weight = *vector::borrow(&after_stake_weights, idx);
+            ts::next_tx(scenario, staker);
+            {
+                let staker_reward = ts::take_from_sender<Coin<SUI>>(scenario);
+                let expected_reward_amount = math::mul_factor(first_released_amount, stake_weight, total_weight) + math::mul_factor(second_released_amount, stake_weight, after_total_weight);
+                let reward_amount = coin::value(&staker_reward);
+                // std::debug::print(&coin::value(&staker_reward));
+                // std::debug::print(&expected_reward_amount);
+                assert!(math::approx_equal(reward_amount, expected_reward_amount, 1), 0);
+                ts::return_to_sender(scenario, staker_reward);
             };
             idx = idx + 1;
         };
@@ -158,9 +217,6 @@ module kriya_fountain::test_unstake {
         };
 
         let idx: u64 = 0;
-        let unstakers = vector<address>[];
-        let stake_amounts = vector<u64>[];
-        let reward_amounts = vector<u64>[];
         while (idx < staker_count) {
             let staker = *vector::borrow(&stakers, idx);
             ts::next_tx(scenario, staker);
@@ -168,13 +224,6 @@ module kriya_fountain::test_unstake {
                 let clock = ts::take_shared<Clock>(scenario);
                 let fountain = ts::take_shared<Fountain<TEST_COIN_A, TEST_COIN_B, SUI>>(scenario);
                 let proof = ts::take_from_sender<StakeProof<TEST_COIN_A, TEST_COIN_B, SUI>>(scenario);
-                let total_weight = fc::get_total_weight(&fountain);
-                let stake_weight = fc::get_proof_stake_weight(&proof);
-                let stake_amount = fc::get_proof_stake_amount(&proof);
-                let expected_reward_amount = math::mul_factor(flow_amount, stake_weight, total_weight);
-                vector::push_back(&mut unstakers, staker);
-                vector::push_back(&mut stake_amounts, stake_amount);
-                vector::push_back(&mut reward_amounts, expected_reward_amount);
                 fp::unstake(&clock, &mut fountain, proof, ts::ctx(scenario));
                 ts::return_shared(clock);
                 ts::return_shared(fountain);
