@@ -7,4 +7,4 @@ published-at = "0xe10f85f47c6d11f63e650aa7daf168c55ead9abb6da4227eba5dd5e4f8d890
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet" }
 
 [addresses]
-kriya = "0xe10f85f47c6d11f63e650aa7daf168c55ead9abb6da4227eba5dd5e4f8d890b1"
+kriya = "0xa0eba10b173538c8fecca1dff298e488402cc9ff374f8a12ca7758eebe830b66"
