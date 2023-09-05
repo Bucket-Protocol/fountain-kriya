@@ -4,7 +4,7 @@ Incentive manager for KriyaDEX liquidity providers.
 ## Objects
 Package ID
 ```
-0x3daf65b7356c560bd5bdd989aa2526e38a8e1d0b34c653b93fd65fa9bedc8dc0
+0xaacefb48040d82c99a7531bbf87e334326f2e042d9c85b32826c1bed66eae847
 ```
 SUI-BUCK Fountain, initial_shared_version `18368425`
 ```

@@ -1,7 +1,8 @@
 [package]
 name = "KriyaFountain"
 version = "0.0.1"
-published-at = "0x3daf65b7356c560bd5bdd989aa2526e38a8e1d0b34c653b93fd65fa9bedc8dc0"
+# published-at = "0x3daf65b7356c560bd5bdd989aa2526e38a8e1d0b34c653b93fd65fa9bedc8dc0"
+published-at = "0xaacefb48040d82c99a7531bbf87e334326f2e042d9c85b32826c1bed66eae847"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet" }
