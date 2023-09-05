@@ -5,7 +5,7 @@ module kriya_fountain::fountain_periphery {
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::balance;
-    use kriya_fountain::fountain_core::{Self as core, Fountain, StakeProof};
+    use kriya_fountain::fountain_core::{Self as core, Fountain, StakeProof, AdminCap};
     use kriya::spot_dex::KriyaLPToken;
 
     public entry fun create_fountain<A, B, R>(
@@ -86,6 +86,15 @@ module kriya_fountain::fountain_periphery {
         }
     }
 
+    public entry fun create_penalty_vault<A, B, R>(
+        admin_cap: &AdminCap,
+        fountain: &mut Fountain<A, B, R>,
+        init_token: KriyaLPToken<A, B>,
+        max_penalty_rate: u64,
+    ) {
+        core::new_penalty_vault(admin_cap, fountain, init_token, max_penalty_rate);
+    }
+
     public entry fun supply<A, B, R>(clock: &Clock, fountain: &mut Fountain<A, B, R>, resource: Coin<R>) {
         let resource = coin::into_balance(resource);
         core::supply(clock, fountain, resource);
@@ -142,5 +151,32 @@ module kriya_fountain::fountain_periphery {
         } else {
             balance::destroy_zero(reward);
         };
+    }
+
+    public entry fun force_unstake<A, B, R>(
+        clock: &Clock,
+        fountain: &mut Fountain<A, B, R>,
+        proof: StakeProof<A, B, R>,
+        ctx: &mut TxContext,
+    ) {
+        let (unstake_output, reward) = core::force_unstake(clock, fountain, proof, ctx);
+        let sender = tx_context::sender(ctx);
+        transfer::public_transfer(unstake_output, sender);
+        if (balance::value(&reward) > 0) {
+            let reward = coin::from_balance(reward, ctx);
+            transfer::public_transfer(reward, sender);
+        } else {
+            balance::destroy_zero(reward);
+        }        
+    }
+
+    public entry fun claim_penalty<A, B, R>(
+        admin_cap: &AdminCap,
+        fountain: &mut Fountain<A, B, R>,
+        recipient: address,
+        ctx: &mut TxContext,
+    ) {
+        let penalty = core::claim_penalty(admin_cap, fountain, ctx);
+        transfer::public_transfer(penalty, recipient);
     }
 }
